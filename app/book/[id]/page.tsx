@@ -3,8 +3,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getBooks, getBookPages, addSession, addMemo, deleteMemo, deleteBook, saveToc, getSessionSummary, Book, PageData, TocEntry } from '@/lib/storage';
 
-const COLORS = ['#e8ddd4', '#c9a882', '#8b5e3c', '#4a2f1a'];
-const ROW_H = 8;
+const ROW_H = 10;
+const BLOCK_W = 16;
+const BLOCK_COLORS = ['#c9a882', '#a07850', '#8b5e3c', '#4a2f1a'];
 
 function getTodayStr() {
   const d = new Date();
@@ -18,18 +19,14 @@ function PageGrid({ totalPages, pages, toc, selectedPage, onSelectPage }: {
   selectedPage: number | null;
   onSelectPage: (p: number) => void;
 }) {
-  let maxSessions = 1;
-  Object.values(pages).forEach(d => {
-    if (d.sessions?.length > maxSessions) maxSessions = d.sessions.length;
-  });
   const tocStartPages = new Set((toc || []).map(e => e.page));
 
   return (
     <div className="flex overflow-x-auto">
       {/* 목차 컬럼 */}
       {toc && toc.length > 0 && (
-        <div className="flex-shrink-0 w-24 mr-1">
-          <div style={{ height: 24 }} />
+        <div className="flex-shrink-0 w-24 mr-2">
+          <div style={{ height: 28 }} />
           {Array.from({ length: totalPages }, (_, i) => {
             const p = i + 1;
             const entry = toc.find(e => e.page === p);
@@ -49,12 +46,12 @@ function PageGrid({ totalPages, pages, toc, selectedPage, onSelectPage }: {
 
       {/* 페이지 스트립 */}
       <div className="flex-shrink-0">
-        <div className="flex items-center mb-1" style={{ height: 20 }}>
+        {/* 헤더 */}
+        <div style={{ height: 28 }} className="flex items-end pb-1">
           <div style={{ width: 32 }} />
-          {Array.from({ length: maxSessions }, (_, i) => (
-            <div key={i} className="text-[9px] text-[#8b5e3c] font-semibold text-center" style={{ width: 32 }}>{i+1}회</div>
-          ))}
+          <span className="text-[9px] text-[#8b5e3c] font-semibold">횟수 →</span>
         </div>
+
         {Array.from({ length: totalPages }, (_, i) => {
           const p = i + 1;
           const data = pages[String(p)];
@@ -67,36 +64,57 @@ function PageGrid({ totalPages, pages, toc, selectedPage, onSelectPage }: {
             <button
               key={p}
               onClick={() => onSelectPage(p)}
-              className={`flex items-center ${isSelected ? 'bg-[#8b5e3c]/10 rounded' : ''} ${isTocStart ? 'mt-0.5' : ''}`}
+              className={`flex items-center ${isSelected ? 'bg-[#8b5e3c]/10 rounded' : ''} ${isTocStart ? 'border-t border-[#e0d4c8]' : ''}`}
               style={{ height: ROW_H + 1 }}
             >
-              <span className="text-right pr-1 text-[8px] text-gray-300" style={{ width: 32 }}>
+              <span className="text-right pr-1 text-[8px] text-gray-300 flex-shrink-0" style={{ width: 32 }}>
                 {showLabel ? p : ''}
               </span>
-              {Array.from({ length: maxSessions }, (_, si) => (
-                <div
-                  key={si}
-                  className={`rounded-sm mx-0.5 ${hasMemo && si === 0 ? 'border-l-2 border-red-400' : ''}`}
-                  style={{
-                    width: 28,
-                    height: ROW_H,
-                    backgroundColor: si < sessionCount ? COLORS[Math.min(si + 1, 3)] : '#f0ebe6',
-                  }}
-                />
-              ))}
+              <div className="flex items-center" style={{ gap: 2 }}>
+                {sessionCount === 0 ? (
+                  <div style={{ width: 36, height: 2, backgroundColor: '#ede6df', borderRadius: 1 }} />
+                ) : (
+                  Array.from({ length: sessionCount }, (_, si) => (
+                    <div
+                      key={si}
+                      style={{
+                        width: BLOCK_W,
+                        height: ROW_H - 2,
+                        backgroundColor: BLOCK_COLORS[Math.min(si, 3)],
+                        borderRadius: 2,
+                      }}
+                    />
+                  ))
+                )}
+                {hasMemo && (
+                  <div style={{ width: 4, height: ROW_H - 2, backgroundColor: '#f87171', borderRadius: 2, marginLeft: 3 }} />
+                )}
+              </div>
             </button>
           );
         })}
+
         {/* 범례 */}
-        <div className="flex flex-wrap gap-2 mt-3">
-          {['안 읽음', '1회', '2회', '3회+'].map((label, i) => (
-            <div key={i} className="flex items-center gap-1">
-              <div className="w-3 h-2 rounded-sm" style={{ backgroundColor: COLORS[i] }} />
-              <span className="text-[9px] text-gray-400">{label}</span>
+        <div className="flex flex-wrap gap-3 mt-3">
+          <div className="flex items-center gap-1">
+            <div style={{ width: 28, height: 2, backgroundColor: '#ede6df', borderRadius: 1 }} />
+            <span className="text-[9px] text-gray-400">안 읽음</span>
+          </div>
+          {[1, 2, 3].map(n => (
+            <div key={n} className="flex items-center gap-1">
+              <div className="flex" style={{ gap: 2 }}>
+                {Array.from({ length: n }, (_, si) => (
+                  <div key={si} style={{ width: 8, height: 8, backgroundColor: BLOCK_COLORS[si], borderRadius: 1 }} />
+                ))}
+              </div>
+              <span className="text-[9px] text-gray-400">{n}회{n === 3 ? '+' : ''}</span>
             </div>
           ))}
           <div className="flex items-center gap-1">
-            <div className="w-3 h-2 rounded-sm border-l-2 border-red-400" style={{ backgroundColor: COLORS[1] }} />
+            <div className="flex items-center" style={{ gap: 2 }}>
+              <div style={{ width: 8, height: 8, backgroundColor: BLOCK_COLORS[0], borderRadius: 1 }} />
+              <div style={{ width: 4, height: 8, backgroundColor: '#f87171', borderRadius: 1 }} />
+            </div>
             <span className="text-[9px] text-gray-400">메모</span>
           </div>
         </div>
