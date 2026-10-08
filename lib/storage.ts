@@ -68,14 +68,12 @@ export async function addSession(bookId: string, date: string, startPage: number
   for (let p = startPage; p <= endPage; p++) {
     const key = String(p);
     const current = existing[key] || { sessions: [], memos: [] };
-    if (!current.sessions.includes(date)) {
-      upserts.push({
-        book_id: bookId,
-        page_number: p,
-        sessions: [...current.sessions, date],
-        memos: current.memos,
-      });
-    }
+    upserts.push({
+      book_id: bookId,
+      page_number: p,
+      sessions: [...current.sessions, date],
+      memos: current.memos,
+    });
   }
   if (upserts.length > 0) {
     await supabase.from('book_pages').upsert(upserts, { onConflict: 'book_id,page_number' });

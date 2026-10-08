@@ -3,40 +3,110 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getBooks, getBookPages, addSession, addMemo, deleteMemo, deleteBook, saveToc, getSessionSummary, Book, PageData, TocEntry } from '@/lib/storage';
 
-const ROW_H = 10;
-const BLOCK_W = 16;
-const BLOCK_COLORS = ['#c9a882', '#a07850', '#8b5e3c', '#4a2f1a'];
+const WIN = {
+  panel: {
+    background: '#d4d0c8',
+    border: '2px solid #000',
+    boxShadow: 'inset 1px 1px 0 #fff, inset -1px -1px 0 #4a4a4a',
+  } as React.CSSProperties,
+  titleBar: {
+    background: '#000',
+    color: '#fff',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 11,
+    fontWeight: 'bold',
+    padding: '3px 8px',
+    userSelect: 'none' as const,
+    letterSpacing: 1,
+  } as React.CSSProperties,
+  btn: {
+    background: '#d4d0c8',
+    border: '2px solid',
+    borderColor: '#fff #4a4a4a #4a4a4a #fff',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 10,
+    fontWeight: 'bold',
+    padding: '3px 8px',
+    cursor: 'pointer',
+    letterSpacing: 0.5,
+    color: '#000',
+  } as React.CSSProperties,
+  btnPrimary: {
+    background: '#000',
+    color: '#fff',
+    border: '2px solid #000',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 10,
+    fontWeight: 'bold',
+    padding: '3px 8px',
+    cursor: 'pointer',
+    letterSpacing: 0.5,
+  } as React.CSSProperties,
+  input: {
+    background: '#fff',
+    color: '#000',
+    border: '2px solid',
+    borderColor: '#4a4a4a #fff #fff #4a4a4a',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 11,
+    padding: '4px 8px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+  } as React.CSSProperties,
+};
+
+const STIPPLE: React.CSSProperties = {
+  backgroundImage: 'radial-gradient(circle, #999 1px, transparent 1px)',
+  backgroundSize: '4px 4px',
+  backgroundColor: '#fff',
+};
+
+const ROW_H = 13;
+const CELL_SIZE = 11;
+const CELL_GAP = 2;
 
 function getTodayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
-function PageGrid({ totalPages, pages, toc, selectedPage, onSelectPage }: {
+function PageGrid({ totalPages, pages, toc, selectedPage, onSelectPage, onAddMemo }: {
   totalPages: number;
   pages: Record<string, PageData>;
   toc: TocEntry[] | null;
   selectedPage: number | null;
   onSelectPage: (p: number) => void;
+  onAddMemo: (p: number) => void;
 }) {
+  const [expandedMemo, setExpandedMemo] = useState<number | null>(null);
   const tocStartPages = new Set((toc || []).map(e => e.page));
 
   return (
-    <div className="flex overflow-x-auto">
+    <div style={{ display: 'flex', overflowX: 'auto' }}>
       {/* 목차 컬럼 */}
       {toc && toc.length > 0 && (
-        <div className="flex-shrink-0 w-24 mr-2">
-          <div style={{ height: 28 }} />
+        <div style={{ flexShrink: 0, width: 90, marginRight: 4 }}>
+          <div style={{ height: 24 }} />
           {Array.from({ length: totalPages }, (_, i) => {
             const p = i + 1;
             const entry = toc.find(e => e.page === p);
+            const memoCount = pages[String(p)]?.memos?.length || 0;
+            const memoExpanded = expandedMemo === p;
             return (
-              <div key={p} style={{ height: ROW_H + 1 }} className="relative flex items-center overflow-hidden">
-                {entry && (
-                  <>
-                    <span className="text-[7px] text-[#8b5e3c] font-semibold truncate leading-none">{entry.title}</span>
-                    <div className="absolute bottom-0 left-0 right-0 h-px bg-[#d4c4b8]" />
-                  </>
+              <div key={p}>
+                <div style={{ height: ROW_H, position: 'relative', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                  {entry && (
+                    <>
+                      <span style={{ fontSize: 7, color: '#000', fontWeight: 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: 0.3, fontFamily: '"Courier New", monospace' }}>
+                        {entry.title}
+                      </span>
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, background: '#000' }} />
+                    </>
+                  )}
+                </div>
+                {memoExpanded && memoCount > 0 && (
+                  <div style={{ height: memoCount * 44 }} />
                 )}
               </div>
             );
@@ -44,80 +114,113 @@ function PageGrid({ totalPages, pages, toc, selectedPage, onSelectPage }: {
         </div>
       )}
 
-      {/* 페이지 스트립 */}
-      <div className="flex-shrink-0">
-        {/* 헤더 */}
-        <div style={{ height: 28 }} className="flex items-end pb-1">
-          <div style={{ width: 32 }} />
-          <span className="text-[9px] text-[#8b5e3c] font-semibold">횟수 →</span>
+      {/* 페이지 그리드 */}
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ height: 24, display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
+          <div style={{ width: 30 }} />
+          <span style={{ fontSize: 8, fontWeight: 'bold', letterSpacing: 1, fontFamily: '"Courier New", monospace', color: '#000' }}>COUNT &rarr;</span>
         </div>
 
         {Array.from({ length: totalPages }, (_, i) => {
           const p = i + 1;
           const data = pages[String(p)];
           const sessionCount = data?.sessions?.length || 0;
-          const hasMemo = (data?.memos?.length || 0) > 0;
+          const memos = data?.memos || [];
+          const hasMemo = memos.length > 0;
           const isSelected = selectedPage === p;
           const showLabel = p === 1 || p % 10 === 0 || p === totalPages;
           const isTocStart = tocStartPages.has(p);
+          const cellCount = Math.max(5, sessionCount);
+          const memoExpanded = expandedMemo === p;
+
           return (
-            <button
-              key={p}
-              onClick={() => onSelectPage(p)}
-              className={`flex items-center ${isSelected ? 'bg-[#8b5e3c]/10 rounded' : ''} ${isTocStart ? 'border-t border-[#e0d4c8]' : ''}`}
-              style={{ height: ROW_H + 1 }}
-            >
-              <span className="text-right pr-1 text-[8px] text-gray-300 flex-shrink-0" style={{ width: 32 }}>
-                {showLabel ? p : ''}
-              </span>
-              <div className="flex items-center" style={{ gap: 2 }}>
-                {sessionCount === 0 ? (
-                  <div style={{ width: 36, height: 2, backgroundColor: '#ede6df', borderRadius: 1 }} />
-                ) : (
-                  Array.from({ length: sessionCount }, (_, si) => (
-                    <div
-                      key={si}
+            <div key={p}>
+              <button
+                onClick={() => onSelectPage(p)}
+                style={{
+                  display: 'flex', alignItems: 'center', height: ROW_H,
+                  background: isSelected ? '#000' : 'transparent',
+                  border: 'none', cursor: 'pointer', width: '100%',
+                  borderTop: isTocStart ? '1px solid #000' : 'none',
+                  padding: 0,
+                }}
+              >
+                <span style={{
+                  width: 30, textAlign: 'right', paddingRight: 3,
+                  fontSize: 7, color: isSelected ? '#fff' : '#000',
+                  fontFamily: '"Courier New", monospace', flexShrink: 0,
+                }}>
+                  {showLabel ? p : ''}
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, height: ROW_H }}>
+                  <div style={{ display: 'flex', gap: CELL_GAP }}>
+                    {Array.from({ length: cellCount }, (_, j) => (
+                      <div
+                        key={j}
+                        style={{
+                          width: CELL_SIZE,
+                          height: CELL_SIZE,
+                          border: '1px solid #000',
+                          flexShrink: 0,
+                          ...(j < sessionCount
+                            ? { background: isSelected ? '#fff' : '#000' }
+                            : isSelected
+                              ? { background: '#333' }
+                              : STIPPLE),
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  {/* 메모 토글 버튼 */}
+                  {hasMemo && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setExpandedMemo(memoExpanded ? null : p); }}
                       style={{
-                        width: BLOCK_W,
-                        height: ROW_H - 2,
-                        backgroundColor: BLOCK_COLORS[Math.min(si, 3)],
-                        borderRadius: 2,
+                        background: memoExpanded ? '#000' : '#fff',
+                        color: memoExpanded ? '#fff' : '#000',
+                        border: '1px solid #000',
+                        fontFamily: '"Courier New", monospace',
+                        fontSize: 7, fontWeight: 'bold',
+                        padding: '0 3px', cursor: 'pointer', flexShrink: 0,
+                        height: CELL_SIZE, lineHeight: `${CELL_SIZE}px`,
                       }}
-                    />
-                  ))
-                )}
-                {hasMemo && (
-                  <div style={{ width: 4, height: ROW_H - 2, backgroundColor: '#f87171', borderRadius: 2, marginLeft: 3 }} />
-                )}
-              </div>
-            </button>
+                    >
+                      {memoExpanded ? '▼' : '▶'}
+                    </button>
+                  )}
+
+                  {isSelected && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onAddMemo(p); }}
+                      style={{ ...WIN.btn, fontSize: 8, padding: '1px 5px', flexShrink: 0, background: '#fff', color: '#000' }}
+                    >MEMO+</button>
+                  )}
+                </div>
+              </button>
+
+              {/* 메모 인라인 펼치기 */}
+              {memoExpanded && memos.length > 0 && (
+                <div style={{ marginLeft: 30, borderLeft: '2px solid #000', paddingLeft: 6 }}>
+                  {memos.map((m, mi) => (
+                    <div key={mi} style={{
+                      padding: '4px 0',
+                      borderBottom: mi < memos.length - 1 ? '1px dashed #000' : 'none',
+                      minHeight: 44,
+                    }}>
+                      <span style={{ fontSize: 7, fontWeight: 'bold', display: 'block', letterSpacing: 0.3, fontFamily: '"Courier New", monospace', color: '#000' }}>
+                        {m.date}
+                      </span>
+                      <span style={{ fontSize: 9, display: 'block', lineHeight: 1.5, fontFamily: '"Courier New", monospace', color: '#000', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                        {m.content}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           );
         })}
-
-        {/* 범례 */}
-        <div className="flex flex-wrap gap-3 mt-3">
-          <div className="flex items-center gap-1">
-            <div style={{ width: 28, height: 2, backgroundColor: '#ede6df', borderRadius: 1 }} />
-            <span className="text-[9px] text-gray-400">안 읽음</span>
-          </div>
-          {[1, 2, 3].map(n => (
-            <div key={n} className="flex items-center gap-1">
-              <div className="flex" style={{ gap: 2 }}>
-                {Array.from({ length: n }, (_, si) => (
-                  <div key={si} style={{ width: 8, height: 8, backgroundColor: BLOCK_COLORS[si], borderRadius: 1 }} />
-                ))}
-              </div>
-              <span className="text-[9px] text-gray-400">{n}회{n === 3 ? '+' : ''}</span>
-            </div>
-          ))}
-          <div className="flex items-center gap-1">
-            <div className="flex items-center" style={{ gap: 2 }}>
-              <div style={{ width: 8, height: 8, backgroundColor: BLOCK_COLORS[0], borderRadius: 1 }} />
-              <div style={{ width: 4, height: 8, backgroundColor: '#f87171', borderRadius: 1 }} />
-            </div>
-            <span className="text-[9px] text-gray-400">메모</span>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -202,7 +305,16 @@ export default function BookDetailPage() {
     router.push('/');
   };
 
-  if (!book) return <div className="min-h-screen bg-[#f8f4ef] flex items-center justify-center text-gray-400">불러오는 중...</div>;
+  if (!book) return (
+    <div style={{ minHeight: '100vh', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Courier New", monospace' }}>
+      <div style={{ ...WIN.panel }}>
+        <div style={WIN.titleBar}>── LOADING ──────────────────────</div>
+        <div style={{ ...STIPPLE, padding: 30, textAlign: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 'bold', letterSpacing: 1 }}>LOADING...</span>
+        </div>
+      </div>
+    </div>
+  );
 
   const sessions = getSessionSummary(pages);
   const totalReadPages = Object.values(pages).filter(p => p.sessions?.length > 0).length;
@@ -210,128 +322,169 @@ export default function BookDetailPage() {
   const selectedData = selectedPage ? pages[String(selectedPage)] : null;
 
   return (
-    <main className="min-h-screen bg-[#f8f4ef]">
-      <div className="max-w-2xl mx-auto">
+    <main style={{ minHeight: '100vh', background: '#fff', fontFamily: '"Courier New", monospace', color: '#000' }}>
+      <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 0 60px' }}>
+
         {/* 헤더 */}
-        <header className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 sticky top-0 z-10">
-          <button onClick={() => router.back()} className="text-[#8b5e3c] text-lg">←</button>
-          <span className="font-bold text-[#2c1810] flex-1 truncate">{book.title}</span>
-        </header>
-
-        {/* 책 정보 */}
-        <div className="flex gap-4 bg-white p-4 border-b border-gray-100">
-          {book.thumbnail
-            ? <img src={book.thumbnail} alt={book.title} className="w-16 h-24 rounded-lg object-cover flex-shrink-0 shadow" />
-            : <div className="w-16 h-24 rounded-lg bg-[#f0e6d8] flex items-center justify-center text-3xl flex-shrink-0">📚</div>}
-          <div className="flex-1 flex flex-col justify-center min-w-0">
-            <p className="font-bold text-[#2c1810] text-base line-clamp-2">{book.title}</p>
-            <p className="text-sm text-gray-400 mt-0.5">{book.authors}</p>
-            <p className="text-xs text-gray-300 mt-0.5">총 {book.total_pages}p</p>
-            <div className="mt-2 h-1.5 bg-[#f0e6d8] rounded-full overflow-hidden">
-              <div className="h-full bg-[#8b5e3c] rounded-full transition-all" style={{ width: `${progress}%` }} />
-            </div>
-            <p className="text-xs text-[#8b5e3c] font-semibold mt-1">{totalReadPages}p 읽음 ({progress}%)</p>
+        <div style={{ ...WIN.panel, margin: 12, marginTop: 16 }}>
+          <div style={WIN.titleBar}>
+            ── {book.title.slice(0, 28)}{book.title.length > 28 ? '…' : ''} ──
           </div>
-        </div>
 
-        {/* 페이지 그리드 */}
-        <div className="bg-white mt-2 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="font-bold text-[#2c1810] text-sm">읽은 구간</span>
-            <div className="flex gap-2">
-              <button onClick={fetchToc} disabled={tocLoading}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full text-white ${toc ? 'bg-[#a07850]' : 'bg-gray-400'}`}>
-                {tocLoading ? '로딩...' : toc ? '목차 갱신' : '목차 불러오기'}
-              </button>
-              <button onClick={() => setShowSessionModal(true)}
-                className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#8b5e3c] text-white">
-                + 기록 추가
-              </button>
+          {/* 책 정보 */}
+          <div style={{ display: 'flex', gap: 10, padding: '10px 10px 8px', borderBottom: '1px solid #999' }}>
+            <div style={{ width: 52, height: 72, flexShrink: 0, border: '2px solid #000', overflow: 'hidden', background: '#fff' }}>
+              {book.thumbnail
+                ? <img src={book.thumbnail} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <div style={{ ...STIPPLE, width: '100%', height: '100%' }} />}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 11, fontWeight: 'bold', margin: 0, letterSpacing: 0.3, color: '#000' }}>{book.title}</p>
+              <p style={{ fontSize: 9, margin: '2px 0 0', color: '#000' }}>{book.authors}</p>
+              <p style={{ fontSize: 9, margin: '1px 0 0', color: '#000' }}>총 {book.total_pages}p</p>
+              <div style={{ marginTop: 6, height: 10, border: '2px solid #000', background: '#fff', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${progress}%`, background: '#000', transition: 'width 0.3s' }} />
+              </div>
+              <p style={{ fontSize: 9, fontWeight: 'bold', margin: '2px 0 0', letterSpacing: 0.5, color: '#000' }}>
+                {totalReadPages}p READ ({progress}%)
+              </p>
             </div>
           </div>
-          {book.total_pages > 0
-            ? <PageGrid totalPages={book.total_pages} pages={pages} toc={toc} selectedPage={selectedPage}
-                onSelectPage={p => setSelectedPage(prev => prev === p ? null : p)} />
-            : <p className="text-sm text-gray-400">페이지 정보가 없어요. 책을 다시 추가해보세요.</p>}
+
+          {/* 툴바 */}
+          <div style={{ padding: '6px 10px', display: 'flex', gap: 6, borderBottom: '1px solid #999' }}>
+            <button onClick={() => router.back()} style={{ ...WIN.btn, padding: '3px 6px' }}>◀</button>
+            <div style={{ flex: 1 }} />
+            <button onClick={fetchToc} disabled={tocLoading} style={{ ...WIN.btn, opacity: tocLoading ? 0.6 : 1 }}>
+              {tocLoading ? 'LOADING…' : toc ? 'REFRESH TOC' : 'LOAD TOC'}
+            </button>
+            <button onClick={() => setShowSessionModal(true)} style={WIN.btnPrimary}>
+              + 기록
+            </button>
+          </div>
+
+          {/* 페이지 그리드 라벨 */}
+          <div style={{ padding: '6px 10px 2px' }}>
+            <span style={{ fontSize: 9, fontWeight: 'bold', letterSpacing: 1, color: '#000' }}>── 읽은 구간 ──</span>
+          </div>
+
+          {/* 페이지 그리드 */}
+          <div style={{ padding: '0 10px 10px', overflowX: 'auto' }}>
+            {book.total_pages > 0
+              ? <PageGrid totalPages={book.total_pages} pages={pages} toc={toc} selectedPage={selectedPage}
+                  onSelectPage={p => setSelectedPage(prev => prev === p ? null : p)}
+                  onAddMemo={p => { setSelectedPage(p); setShowMemoModal(true); }} />
+              : <p style={{ fontSize: 10, color: '#000', margin: 0, letterSpacing: 0.5 }}>페이지 정보가 없어요.</p>}
+          </div>
         </div>
 
         {/* 선택된 페이지 상세 */}
         {selectedPage && (
-          <div className="bg-white mt-2 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="font-bold text-[#2c1810]">{selectedPage}페이지</span>
-              <button onClick={() => setShowMemoModal(true)}
-                className="text-xs font-semibold px-3 py-1.5 rounded-full bg-[#8b5e3c] text-white">+ 메모</button>
-            </div>
-            {selectedData?.sessions?.length ? (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {selectedData.sessions.map((d, i) => (
-                  <span key={i} className="text-xs bg-[#f0e6d8] text-[#8b5e3c] font-semibold px-3 py-1 rounded-full">{d}</span>
-                ))}
+          <div style={{ ...WIN.panel, margin: '0 12px 8px' }}>
+            <div style={WIN.titleBar}>── PAGE {selectedPage} ──────────────────</div>
+            <div style={{ padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 'bold', letterSpacing: 0.5, color: '#000' }}>p.{selectedPage}</span>
+                <button onClick={() => setShowMemoModal(true)} style={WIN.btnPrimary}>+ MEMO</button>
               </div>
-            ) : <p className="text-sm text-gray-300 mb-3">아직 읽지 않은 페이지예요</p>}
-            {selectedData?.memos?.map((m, i) => (
-              <div key={i} className="bg-gray-50 rounded-xl p-3 mb-2">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs text-gray-400">{m.date}</span>
-                  <button onClick={() => handleDeleteMemo(selectedPage, i)} className="text-xs text-red-400">삭제</button>
+              {selectedData?.sessions?.length ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                  {selectedData.sessions.map((d, i) => (
+                    <span key={i} style={{ fontSize: 9, fontWeight: 'bold', border: '2px solid #000', padding: '2px 6px', background: '#000', color: '#fff', letterSpacing: 0.5 }}>{d}</span>
+                  ))}
                 </div>
-                <p className="text-sm text-gray-700">{m.content}</p>
-              </div>
-            ))}
+              ) : (
+                <div style={{ background: '#000', color: '#fff', padding: '4px 8px', marginBottom: 8, display: 'inline-block' }}>
+                  <span style={{ fontSize: 9, fontWeight: 'bold', letterSpacing: 0.5 }}>[ 아직 읽지 않은 페이지 ]</span>
+                </div>
+              )}
+              {selectedData?.memos?.map((m, i) => (
+                <div key={i} style={{ border: '2px solid #000', padding: 8, marginBottom: 6, background: '#fff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 9, fontWeight: 'bold', letterSpacing: 0.3, color: '#000' }}>{m.date}</span>
+                    <button onClick={() => handleDeleteMemo(selectedPage, i)}
+                      style={{ ...WIN.btn, fontSize: 8, padding: '1px 4px' }}>DEL</button>
+                  </div>
+                  <p style={{ fontSize: 10, fontWeight: 'bold', margin: 0, lineHeight: 1.5, letterSpacing: 0.3, color: '#000' }}>{m.content}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* 읽기 기록 */}
         {sessions.length > 0 && (
-          <div className="bg-white mt-2 p-4">
-            <p className="font-bold text-[#2c1810] text-sm mb-3">읽기 기록</p>
-            {sessions.map((s, i) => (
-              <div key={i} className="flex items-center py-2 border-b border-gray-50 last:border-0">
-                <span className="text-sm text-gray-400 w-24">{s.date}</span>
-                <span className="text-sm font-semibold text-[#2c1810] flex-1">{s.startPage} - {s.endPage}p</span>
-                <span className="text-xs text-[#8b5e3c]">{s.count}페이지</span>
-              </div>
-            ))}
+          <div style={{ ...WIN.panel, margin: '0 12px 8px' }}>
+            <div style={WIN.titleBar}>── 읽기 기록 ─────────────────────</div>
+            <div>
+              {sessions.map((s, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', padding: '5px 10px',
+                  borderBottom: i < sessions.length - 1 ? '1px solid #000' : 'none',
+                  fontSize: 9, letterSpacing: 0.5, fontFamily: '"Courier New", monospace', color: '#000',
+                }}>
+                  <span style={{ width: 80, flexShrink: 0 }}>{s.date}</span>
+                  <span style={{ flex: 1, fontWeight: 'bold' }}>{s.startPage} - {s.endPage}p</span>
+                  <span style={{ fontWeight: 'bold' }}>{s.count}p</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        <button onClick={handleDeleteBook} className="w-full py-4 text-red-400 text-sm mt-2">책 삭제</button>
+        {/* 책 삭제 */}
+        <div style={{ margin: '0 12px' }}>
+          <button onClick={handleDeleteBook} style={{ ...WIN.btn, width: '100%', fontSize: 9, padding: '4px 0' }}>
+            [책 삭제]
+          </button>
+        </div>
       </div>
 
       {/* 기록 추가 모달 */}
       {showSessionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowSessionModal(false)}>
-          <div className="w-full max-w-2xl mx-auto bg-white rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
-            <p className="text-center font-bold text-[#2c1810] text-lg mb-5">읽기 기록 추가</p>
-            <label className="text-xs text-gray-400 mb-1 block">날짜</label>
-            <input className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mb-4 outline-none focus:border-[#8b5e3c]"
-              value={date} onChange={e => setDate(e.target.value)} placeholder="YYYY-MM-DD" />
-            <label className="text-xs text-gray-400 mb-1 block">읽은 페이지{book.total_pages ? ` (총 ${book.total_pages}p)` : ''}</label>
-            <div className="flex items-center gap-2 mb-5">
-              <input className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#8b5e3c]"
-                value={startPage} onChange={e => setStartPage(e.target.value)} placeholder="시작" inputMode="numeric" />
-              <span className="text-gray-400">~</span>
-              <input className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-[#8b5e3c]"
-                value={endPage} onChange={e => setEndPage(e.target.value)} placeholder="끝" inputMode="numeric" />
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+          onClick={() => setShowSessionModal(false)}>
+          <div style={{ ...WIN.panel, width: '100%', maxWidth: 340 }} onClick={e => e.stopPropagation()}>
+            <div style={WIN.titleBar}>── 읽기 기록 추가 ────────────────</div>
+            <div style={{ padding: 14 }}>
+              <label style={{ fontSize: 9, fontWeight: 'bold', display: 'block', marginBottom: 4, letterSpacing: 0.5, color: '#000' }}>날짜</label>
+              <input style={{ ...WIN.input, marginBottom: 12 }}
+                value={date} onChange={e => setDate(e.target.value)} placeholder="YYYY-MM-DD" />
+              <label style={{ fontSize: 9, fontWeight: 'bold', display: 'block', marginBottom: 4, letterSpacing: 0.5, color: '#000' }}>
+                읽은 페이지{book.total_pages ? ` (총 ${book.total_pages}p)` : ''}
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <input style={{ ...WIN.input, flex: 1, width: 'auto' }}
+                  value={startPage} onChange={e => setStartPage(e.target.value)} placeholder="시작" inputMode="numeric" />
+                <span style={{ fontSize: 12, fontWeight: 'bold', color: '#000' }}>~</span>
+                <input style={{ ...WIN.input, flex: 1, width: 'auto' }}
+                  value={endPage} onChange={e => setEndPage(e.target.value)} placeholder="끝" inputMode="numeric" />
+              </div>
+              <button onClick={handleAddSession} style={{ ...WIN.btnPrimary, width: '100%', fontSize: 12, padding: '6px 0', marginBottom: 6 }}>
+                [저장]
+              </button>
+              <button onClick={() => setShowSessionModal(false)} style={{ ...WIN.btn, width: '100%', fontSize: 10, padding: '4px 0' }}>취소</button>
             </div>
-            <button onClick={handleAddSession} className="w-full bg-[#8b5e3c] text-white font-bold py-3.5 rounded-xl mb-2">저장</button>
-            <button onClick={() => setShowSessionModal(false)} className="w-full text-gray-400 py-2 text-sm">취소</button>
           </div>
         </div>
       )}
 
       {/* 메모 모달 */}
       {showMemoModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowMemoModal(false)}>
-          <div className="w-full max-w-2xl mx-auto bg-white rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
-            <p className="text-center font-bold text-[#2c1810] text-lg mb-5">{selectedPage}페이지 메모</p>
-            <textarea
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mb-5 outline-none focus:border-[#8b5e3c] h-32 resize-none"
-              value={memoText} onChange={e => setMemoText(e.target.value)}
-              placeholder="이 페이지에서 떠오른 생각을 적어보세요" autoFocus />
-            <button onClick={handleAddMemo} className="w-full bg-[#8b5e3c] text-white font-bold py-3.5 rounded-xl mb-2">저장</button>
-            <button onClick={() => setShowMemoModal(false)} className="w-full text-gray-400 py-2 text-sm">취소</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+          onClick={() => setShowMemoModal(false)}>
+          <div style={{ ...WIN.panel, width: '100%', maxWidth: 340 }} onClick={e => e.stopPropagation()}>
+            <div style={WIN.titleBar}>── p.{selectedPage} 메모 ─────────────────</div>
+            <div style={{ padding: 14 }}>
+              <textarea
+                style={{ ...WIN.input, height: 100, resize: 'none', marginBottom: 12, display: 'block', lineHeight: 1.5 }}
+                value={memoText} onChange={e => setMemoText(e.target.value)}
+                placeholder="이 페이지에서 떠오른 생각..." autoFocus />
+              <button onClick={handleAddMemo} style={{ ...WIN.btnPrimary, width: '100%', fontSize: 12, padding: '6px 0', marginBottom: 6 }}>
+                [저장]
+              </button>
+              <button onClick={() => setShowMemoModal(false)} style={{ ...WIN.btn, width: '100%', fontSize: 10, padding: '4px 0' }}>취소</button>
+            </div>
           </div>
         </div>
       )}

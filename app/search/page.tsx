@@ -9,7 +9,68 @@ interface KakaoDoc {
   authors: string[];
   thumbnail: string;
   contents: string;
+  yes24Id?: number;
+  pages?: number | null;
 }
+
+const WIN = {
+  panel: {
+    background: '#d4d0c8',
+    border: '2px solid #000',
+    boxShadow: 'inset 1px 1px 0 #fff, inset -1px -1px 0 #4a4a4a',
+  } as React.CSSProperties,
+  titleBar: {
+    background: '#000',
+    color: '#fff',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 12,
+    fontWeight: 'bold',
+    padding: '3px 8px',
+    userSelect: 'none' as const,
+    letterSpacing: 1,
+  } as React.CSSProperties,
+  btn: {
+    background: '#d4d0c8',
+    border: '2px solid',
+    borderColor: '#fff #4a4a4a #4a4a4a #fff',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 11,
+    fontWeight: 'bold',
+    padding: '4px 12px',
+    cursor: 'pointer',
+    letterSpacing: 0.5,
+  } as React.CSSProperties,
+  btnPrimary: {
+    background: '#000',
+    color: '#fff',
+    border: '2px solid #000',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 11,
+    fontWeight: 'bold',
+    padding: '4px 12px',
+    cursor: 'pointer',
+    letterSpacing: 0.5,
+  } as React.CSSProperties,
+  input: {
+    background: '#fff',
+    color: '#000',
+    border: '2px solid',
+    borderColor: '#4a4a4a #fff #fff #4a4a4a',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 11,
+    padding: '4px 8px',
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    letterSpacing: 0.3,
+  } as React.CSSProperties,
+};
+
+const STIPPLE = {
+  backgroundImage: 'radial-gradient(circle, #999 1px, transparent 1px)',
+  backgroundSize: '4px 4px',
+  backgroundColor: '#fff',
+} as React.CSSProperties;
 
 export default function SearchPage() {
   const router = useRouter();
@@ -38,12 +99,16 @@ export default function SearchPage() {
 
   const selectBook = async (doc: KakaoDoc) => {
     setSelected(doc);
+    if (doc.pages) {
+      setPageCount(doc.pages);
+      setLoadingPages(false);
+      return;
+    }
     setPageCount(null);
     setLoadingPages(true);
     try {
-      const isbns = doc.isbn.split(' ').map(s => s.replace(/-/g, '')).filter(Boolean);
-      const isbn13 = isbns.find(i => i.length === 13) || isbns[0];
-      const res = await fetch(`/api/pages?isbn=${isbn13}&title=${encodeURIComponent(doc.title)}`);
+      const isbn = doc.isbn.split(' ').find(s => s.replace(/-/g, '').length === 13) || doc.isbn;
+      const res = await fetch(`/api/pages?isbn=${isbn}&title=${encodeURIComponent(doc.title)}`);
       const data = await res.json();
       if (data.pages) setPageCount(data.pages);
     } catch {}
@@ -56,7 +121,7 @@ export default function SearchPage() {
       id: selected.isbn,
       title: selected.title,
       authors: selected.authors.join(', '),
-      total_pages: pageCount || 0,
+      total_pages: pageCount || selected.pages || 0,
       thumbnail: selected.thumbnail || null,
       description: selected.contents || '',
     });
@@ -64,69 +129,102 @@ export default function SearchPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f8f4ef]">
-      <div className="max-w-2xl mx-auto">
-        <header className="flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-100 sticky top-0 z-10">
-          <button onClick={() => router.back()} className="text-[#8b5e3c] text-lg">←</button>
-          <input
-            className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-sm bg-gray-50 outline-none focus:border-[#8b5e3c]"
-            placeholder="책 제목을 입력하세요"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && search()}
-          />
-          <button onClick={search} className="bg-[#8b5e3c] text-white text-sm font-semibold px-4 py-2 rounded-xl">
-            검색
-          </button>
-        </header>
+    <main style={{ minHeight: '100vh', background: '#fff', fontFamily: '"Courier New", monospace', color: '#000' }}>
+      <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 0 40px' }}>
 
-        {loading ? (
-          <div className="flex justify-center mt-20 text-[#8b5e3c]">검색 중...</div>
-        ) : (
-          <ul className="p-4 space-y-2">
-            {results.map(doc => (
-              <li key={doc.isbn}>
-                <button onClick={() => selectBook(doc)}
-                  className="w-full flex gap-3 bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow text-left">
-                  {doc.thumbnail
-                    ? <img src={doc.thumbnail} alt={doc.title} className="w-12 h-16 rounded object-cover flex-shrink-0" />
-                    : <div className="w-12 h-16 rounded bg-[#f0e6d8] flex items-center justify-center flex-shrink-0 text-xl">📚</div>}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-[#2c1810] text-sm line-clamp-2">{doc.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{doc.authors.join(', ')}</p>
+        <div style={{ ...WIN.panel, margin: 16, marginTop: 20 }}>
+          <div style={WIN.titleBar}>
+            ── 책 검색 ───────────────────────
+          </div>
+
+          {/* 검색 바 */}
+          <div style={{ padding: '8px 10px', borderBottom: '1px solid #999', display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button onClick={() => router.back()} style={{ ...WIN.btn, padding: '4px 8px', flexShrink: 0 }}>◀</button>
+            <input
+              style={{ ...WIN.input, flex: 1 }}
+              placeholder="책 제목 입력..."
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && search()}
+            />
+            <button onClick={search} style={{ ...WIN.btnPrimary, flexShrink: 0 }}>검색</button>
+          </div>
+
+          {/* 결과 */}
+          {loading ? (
+            <div style={{ ...STIPPLE, padding: 40, textAlign: 'center' }}>
+              <div style={{ background: '#fff', border: '2px solid #000', padding: 12, display: 'inline-block' }}>
+                <p style={{ fontSize: 10, margin: 0, letterSpacing: 1 }}>SEARCHING...</p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {results.map((doc, idx) => (
+                <button key={doc.isbn} onClick={() => selectBook(doc)}
+                  style={{
+                    display: 'flex', gap: 10, padding: '8px 10px', width: '100%',
+                    background: '#d4d0c8', border: 'none', borderBottom: '1px solid #999',
+                    cursor: 'pointer', textAlign: 'left', fontFamily: '"Courier New", monospace',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#b8b4ac')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '#d4d0c8')}
+                >
+                  <div style={{ width: 40, height: 54, flexShrink: 0, border: '2px solid #000', overflow: 'hidden', background: '#fff' }}>
+                    {doc.thumbnail
+                      ? <img src={doc.thumbnail} alt={doc.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <div style={{ ...STIPPLE, width: '100%', height: '100%' }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 10, fontWeight: 'bold', margin: 0, letterSpacing: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {doc.title}
+                    </p>
+                    <p style={{ fontSize: 9, color: '#666', margin: '2px 0 0' }}>{doc.authors.join(', ')}</p>
                     {myBookIds.includes(doc.isbn) && (
-                      <span className="text-xs text-[#8b5e3c] font-semibold mt-1 inline-block">이미 추가됨</span>
+                      <span style={{ fontSize: 9, color: '#000', background: '#d4d0c8', border: '1px solid #000', padding: '1px 4px', marginTop: 2, display: 'inline-block', letterSpacing: 0.5 }}>
+                        [이미 추가됨]
+                      </span>
                     )}
                   </div>
                 </button>
-              </li>
-            ))}
-          </ul>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* 선택 모달 */}
         {selected && (
-          <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setSelected(null)}>
-            <div className="w-full max-w-2xl mx-auto bg-white rounded-t-3xl p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex flex-col items-center gap-3 mb-5">
-                {selected.thumbnail
-                  ? <img src={selected.thumbnail} alt={selected.title} className="w-20 h-28 rounded-lg object-cover shadow" />
-                  : <div className="w-20 h-28 rounded-lg bg-[#f0e6d8] flex items-center justify-center text-4xl">📚</div>}
-                <p className="text-lg font-bold text-[#2c1810] text-center">{selected.title}</p>
-                <p className="text-sm text-gray-400">{selected.authors.join(', ')}</p>
-                <p className="text-sm font-bold text-[#8b5e3c]">
-                  {loadingPages ? '페이지 수 확인 중...' : pageCount ? `총 ${pageCount}페이지` : '페이지 정보 없음'}
-                </p>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+            onClick={() => setSelected(null)}>
+            <div style={{ ...WIN.panel, width: '100%', maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+              <div style={WIN.titleBar}>── 책 추가 ──────────────────────</div>
+              <div style={{ padding: 16 }}>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 14 }}>
+                  <div style={{ width: 56, height: 76, flexShrink: 0, border: '2px solid #000', overflow: 'hidden', background: '#fff' }}>
+                    {selected.thumbnail
+                      ? <img src={selected.thumbnail} alt={selected.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : <div style={{ ...STIPPLE, width: '100%', height: '100%' }} />}
+                  </div>
+                  <div>
+                    <p style={{ fontSize: 11, fontWeight: 'bold', margin: 0, letterSpacing: 0.5 }}>{selected.title}</p>
+                    <p style={{ fontSize: 9, color: '#666', margin: '3px 0' }}>{selected.authors.join(', ')}</p>
+                    <p style={{ fontSize: 10, fontWeight: 'bold', margin: 0, letterSpacing: 0.5 }}>
+                      {loadingPages ? 'LOADING...' : pageCount ? `${pageCount}p` : 'N/A'}
+                    </p>
+                  </div>
+                </div>
                 {selected.contents && (
-                  <p className="text-xs text-gray-500 text-center line-clamp-3">{selected.contents}</p>
+                  <p style={{ fontSize: 9, color: '#555', marginBottom: 14, lineHeight: 1.5, letterSpacing: 0.3,
+                    overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as const }}>
+                    {selected.contents}
+                  </p>
                 )}
+                <button onClick={addBook} style={{ ...WIN.btnPrimary, width: '100%', marginBottom: 6, fontSize: 12, padding: '6px 0' }}>
+                  [ 내 책장에 추가 ]
+                </button>
+                <button onClick={() => setSelected(null)} style={{ ...WIN.btn, width: '100%', fontSize: 10, padding: '4px 0' }}>
+                  취소
+                </button>
               </div>
-              <button onClick={addBook}
-                className="w-full bg-[#8b5e3c] text-white font-bold py-3.5 rounded-xl mb-2">
-                내 책장에 추가
-              </button>
-              <button onClick={() => setSelected(null)}
-                className="w-full text-gray-400 py-2 text-sm">취소</button>
             </div>
           </div>
         )}

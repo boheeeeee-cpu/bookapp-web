@@ -3,55 +3,130 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getBooks, Book } from '@/lib/storage';
 
+const WIN = {
+  panel: {
+    background: '#d4d0c8',
+    border: '2px solid #000',
+    boxShadow: 'inset 1px 1px 0 #fff, inset -1px -1px 0 #4a4a4a',
+  } as React.CSSProperties,
+  titleBar: {
+    background: '#000',
+    color: '#fff',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 12,
+    fontWeight: 'bold',
+    padding: '3px 8px',
+    userSelect: 'none' as const,
+    letterSpacing: 1,
+  } as React.CSSProperties,
+  btn: {
+    background: '#d4d0c8',
+    border: '2px solid',
+    borderColor: '#fff #4a4a4a #4a4a4a #fff',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 11,
+    fontWeight: 'bold',
+    padding: '3px 10px',
+    cursor: 'pointer',
+    letterSpacing: 0.5,
+  } as React.CSSProperties,
+  btnPrimary: {
+    background: '#000',
+    color: '#fff',
+    border: '2px solid #000',
+    fontFamily: '"Courier New", monospace',
+    fontSize: 11,
+    fontWeight: 'bold',
+    padding: '3px 10px',
+    cursor: 'pointer',
+    letterSpacing: 0.5,
+  } as React.CSSProperties,
+};
+
+const STIPPLE = {
+  backgroundImage: 'radial-gradient(circle, #999 1px, transparent 1px)',
+  backgroundSize: '4px 4px',
+  backgroundColor: '#fff',
+} as React.CSSProperties;
+
 export default function Home() {
   const [books, setBooks] = useState<Book[]>([]);
 
   useEffect(() => { getBooks().then(setBooks); }, []);
 
-  const getProgress = (book: Book) => {
-    if (!book.total_pages) return 0;
-    // pages not loaded on home — show 0 for now
-    return 0;
-  };
-
   return (
-    <main className="min-h-screen bg-[#f8f4ef]">
-      <div className="max-w-2xl mx-auto">
-        <header className="flex items-center justify-between px-5 py-4 bg-white border-b border-gray-100 sticky top-0 z-10">
-          <h1 className="text-xl font-bold text-[#2c1810]">내 독서 기록</h1>
-          <Link href="/search" className="bg-[#8b5e3c] text-white text-sm font-semibold px-4 py-2 rounded-full">
-            + 책 추가
-          </Link>
-        </header>
+    <main style={{ minHeight: '100vh', background: '#fff', fontFamily: '"Courier New", monospace', color: '#000' }}>
+      <div style={{ maxWidth: 480, margin: '0 auto', padding: '0 0 40px' }}>
 
-        {books.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
-            <span className="text-6xl">📖</span>
-            <p className="text-lg font-semibold text-[#2c1810]">아직 등록한 책이 없어요</p>
-            <p className="text-sm text-gray-400">책을 검색해서 추가해보세요</p>
+        {/* 메인 윈도우 */}
+        <div style={{ ...WIN.panel, margin: 16, marginTop: 20 }}>
+          <div style={WIN.titleBar}>
+            ── 내 독서 기록 ──────────────────
           </div>
-        ) : (
-          <ul className="p-4 space-y-3">
-            {books.map(book => (
-              <li key={book.id}>
-                <Link href={`/book/${encodeURIComponent(book.id)}`}
-                  className="flex gap-3 bg-white rounded-xl p-3 shadow-sm hover:shadow-md transition-shadow">
-                  {book.thumbnail
-                    ? <img src={book.thumbnail} alt={book.title} className="w-14 h-20 rounded object-cover flex-shrink-0" />
-                    : <div className="w-14 h-20 rounded bg-[#f0e6d8] flex items-center justify-center flex-shrink-0 text-2xl">📚</div>}
-                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <p className="font-bold text-[#2c1810] text-sm leading-snug line-clamp-2">{book.title}</p>
-                    <p className="text-xs text-gray-400 mt-0.5">{book.authors}</p>
-                    <p className="text-xs text-gray-300 mt-0.5">{book.total_pages}p</p>
-                    <div className="mt-2 h-1.5 bg-[#f0e6d8] rounded-full overflow-hidden">
-                      <div className="h-full bg-[#8b5e3c] rounded-full" style={{ width: '0%' }} />
+          <div style={{ padding: '8px 10px 6px', display: 'flex', justifyContent: 'flex-end', borderBottom: '1px solid #999' }}>
+            <Link href="/search" style={{ ...WIN.btnPrimary, textDecoration: 'none', display: 'inline-block' }}>
+              [ + 책 추가 ]
+            </Link>
+          </div>
+
+          {books.length === 0 ? (
+            <div style={{ ...STIPPLE, padding: 40, textAlign: 'center' }}>
+              <div style={{ background: '#fff', border: '2px solid #000', padding: 16, display: 'inline-block' }}>
+                <p style={{ fontSize: 11, fontWeight: 'bold', margin: 0, letterSpacing: 1 }}>[ NO BOOKS FOUND ]</p>
+                <p style={{ fontSize: 10, color: '#666', margin: '6px 0 0', letterSpacing: 0.5 }}>책을 검색해서 추가하세요</p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              {books.map((book, idx) => (
+                <Link key={book.id} href={`/book/${encodeURIComponent(book.id)}`}
+                  style={{ textDecoration: 'none', display: 'block' }}>
+                  <div style={{
+                    display: 'flex', gap: 10, padding: '8px 10px',
+                    borderBottom: idx < books.length - 1 ? '1px solid #999' : 'none',
+                    background: '#d4d0c8',
+                    cursor: 'pointer',
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#b8b4ac')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#d4d0c8')}
+                  >
+                    <div style={{
+                      width: 44, height: 60, flexShrink: 0,
+                      border: '2px solid #000',
+                      overflow: 'hidden', background: '#fff',
+                    }}>
+                      {book.thumbnail
+                        ? <img src={book.thumbnail} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <div style={{ ...STIPPLE, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 18 }}>▪</span>
+                          </div>}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <p style={{ fontSize: 11, fontWeight: 'bold', margin: 0, letterSpacing: 0.5, color: '#000', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {book.title}
+                      </p>
+                      <p style={{ fontSize: 9, fontWeight: 'normal', margin: '2px 0 0', letterSpacing: 0.3 }}>{book.authors}</p>
+                      <p style={{ fontSize: 9, fontWeight: 'normal', margin: '1px 0 0' }}>{book.total_pages}p</p>
+                      {/* 진행 바 */}
+                      <div style={{ marginTop: 4, height: 8, border: '1px solid #000', background: '#fff', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '0%', background: '#000' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, color: '#444', letterSpacing: 0.5 }}>▶</span>
                     </div>
                   </div>
                 </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+              ))}
+            </div>
+          )}
+
+          {/* 상태 바 */}
+          <div style={{ background: '#a8a49c', borderTop: '1px solid #777', padding: '2px 8px', display: 'flex', gap: 8 }}>
+            <span style={{ fontSize: 9, color: '#fff', letterSpacing: 0.5 }}>{books.length} BOOKS</span>
+          </div>
+        </div>
+
       </div>
     </main>
   );

@@ -1,37 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const KYOBO_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept-Language': 'ko-KR,ko;q=0.9',
-  'Referer': 'https://www.kyobobook.co.kr',
-};
+const YES24_KEY = 'yk_live_c9e876ee08c75ea31f08a30e65b33d71a904ea2ce6b8ebd5';
+const YES24_HEADERS = { 'X-Api-Key': YES24_KEY };
 
-async function kyoboPageCount(keyword: string): Promise<number | null> {
-  const searchRes = await fetch(
-    `https://search.kyobobook.co.kr/search?keyword=${encodeURIComponent(keyword)}&target=total`,
-    { headers: KYOBO_HEADERS }
+async function findItem(query: string): Promise<{ pages: number | null; thumbnail: string | null } | null> {
+  const res = await fetch(
+    `https://apis.yes24.com/v1/goods/itemList?query=${encodeURIComponent(query)}&page=1&pageSize=5&category=BOOK&detail=Y`,
+    { headers: YES24_HEADERS }
   );
-  const html = await searchRes.text();
-  const pids = [...html.matchAll(/\/detail\/(S\d+)/g)].map(m => m[1]);
-  const unique = [...new Set(pids)].slice(0, 5);
-  for (const pid of unique) {
-    const detailRes = await fetch(`https://product.kyobobook.co.kr/detail/${pid}`, { headers: KYOBO_HEADERS });
-    const detailHtml = await detailRes.text();
-    const m = detailHtml.match(/쪽수<\/th>\s*<td>([0-9,]+)쪽/);
-    if (m) return parseInt(m[1].replace(/,/g, ''));
-  }
-  return null;
+  const data = await res.json();
+  if (!data.success) return null;
+  const items = data.data?.items || [];
+  const match = items.find((i: { isbn13: string; isbn10: string }) =>
+    i.isbn13 === query || i.isbn10 === query
+  ) || items[0];
+  if (!match) return null;
+  return {
+    pages: match.pages || null,
+    thumbnail: match.cover || null,
+  };
 }
 
 export async function GET(req: NextRequest) {
   const isbn = req.nextUrl.searchParams.get('isbn');
   const title = req.nextUrl.searchParams.get('title');
   try {
-    let pages: number | null = null;
-    if (isbn) pages = await kyoboPageCount(isbn);
-    if (!pages && title) pages = await kyoboPageCount(title);
-    return NextResponse.json({ pages });
+    let item = isbn ? await findItem(isbn) : null;
+    if (!item && title) item = await findItem(title);
+    if (!item) return NextResponse.json({ pages: null, thumbnail: null });
+    return NextResponse.json({ pages: item.pages, thumbnail: item.thumbnail });
   } catch {
-    return NextResponse.json({ pages: null });
+    return NextResponse.json({ pages: null, thumbnail: null });
   }
 }
